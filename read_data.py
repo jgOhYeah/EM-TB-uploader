@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Reads the data from a connected Origin Energy branded smart meter monitor
-and publishes the data to thingsboard.
+"""read_data.py
+A simple script to obtain data from an Origin Energy branded SM-EM-FMAG-P smart
+meter monitor and upload it to ThingsBoard over MQTT.
 
 Written by Jotham Gates, May 2025.
 """
@@ -8,7 +9,6 @@ import re
 import os
 import json
 import threading
-import time
 from typing import Dict, List, Tuple
 import subprocess
 import paho.mqtt.client as mqtt
@@ -16,8 +16,11 @@ import paho.mqtt.client as mqtt
 try:
     import settings
 except ModuleNotFoundError:
-    print("Please make a copy of 'settings.example.py' named 'settings.py' and edit it to match your installation.")
+    print(
+        "Please make a copy of 'settings.example.py' named 'settings.py' and edit it to match your installation."
+    )
     exit(1)
+
 
 class Data:
     def __init__(self, filename: str, needs_quotes: bool = False) -> None:
@@ -68,7 +71,7 @@ class Data:
 
         return filtered_times, filtered_values
 
-    def _all_timestamps(self) -> Tuple[List[int], List[float]]:
+    def all_timestamps(self) -> Tuple[List[int], List[float]]:
         """Converts the data into a tuple containing a list of timestamps and a list of values."""
         times: List[int] = []
         values: List[float] = []
@@ -94,7 +97,9 @@ def remount() -> None:
     except subprocess.CalledProcessError as e:
         raise NotConnectedException(e)
 
+
 Telemetry = List[Dict[str, int | Dict[str, float]]]
+
 
 def as_telemetry(sources: Dict[str, Data]) -> Telemetry:
     """Generates thingsboard telemetry.
@@ -106,14 +111,17 @@ def as_telemetry(sources: Dict[str, Data]) -> Telemetry:
         Telemetry: Thingsboard timeseries list of times and values.
     """
     # Merge everything into a single disctionary.
-    merged:Dict[int, Dict[str, float]] = {}
+    merged: Dict[int, Dict[str, float]] = {}
     for key, source in sources.items():
-        # Add each value from the source to the dictionary.
-        times, values = source._all_timestamps()
+        # Load all timestamps from the js file.
+        times, values = source.all_timestamps()
 
+        # Limit the number of items to upload if requested.
         if settings.LIMIT_RECORDS:
-            times = times[-settings.LIMIT_RECORDS:]
-            values = values[-settings.LIMIT_RECORDS:]
+            times = times[-settings.LIMIT_RECORDS :]
+            values = values[-settings.LIMIT_RECORDS :]
+
+        # Add to the merged dictionary.
         for i in range(len(times)):
             if times[i] not in merged:
                 # This time is not in the results dictionary yet. Add it.
@@ -123,22 +131,25 @@ def as_telemetry(sources: Dict[str, Data]) -> Telemetry:
             merged[times[i]][key] = values[i]
 
     # Convert the dictionary into a list of dictionaries.
-    result:List[Dict[str, int|Dict[str,float]]] = []
+    result: List[Dict[str, int | Dict[str, float]]] = []
     for time, values in merged.items():
         result.append({"ts": time, "values": values})
     return result
 
-def send_telemetry(telemetry:Telemetry) -> None:
+
+def send_telemetry(telemetry: Telemetry) -> None:
     """Sends the telemetry using MQTT."""
     # Connect
     print("Connecting to MQTT")
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2) # type: ignore
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)  # type: ignore
     client.username_pw_set(settings.MQTT_USERNAME)
 
-    done_event = threading.Event()
+    done_event = threading.Event() # Allows processing to proceed once published.
+
     def on_publish(client, userdata, mid, reason_code, properties):
         """Sets the done event flag so that the connection can be shut (single shot script)."""
         done_event.set()
+
     client.on_publish = on_publish
     client.connect(settings.MQTT_BROKER, settings.MQTT_PORT)
     client.loop_start()
@@ -146,15 +157,17 @@ def send_telemetry(telemetry:Telemetry) -> None:
     # Send the telemetry
     print("Publishing")
     TOPIC = "v1/devices/me/telemetry"
-    msg_info = client.publish(TOPIC, json.dumps(telemetry), qos=1) # Set qos=1 so we know when the message was sent.
+    msg_info = client.publish(
+        TOPIC, json.dumps(telemetry), qos=1
+    )  # Set qos=1 so we know when the message was sent.
     msg_info.wait_for_publish()
-
 
     # Disconnect.
     done_event.wait()
     print("Disconnecting")
     client.disconnect()
     client.loop_stop()
+
 
 if __name__ == "__main__":
     remount()
@@ -168,3 +181,4 @@ if __name__ == "__main__":
     )
     print(json.dumps(telemetry))
     send_telemetry(telemetry)
+    print("Finished")
