@@ -50,5 +50,5 @@ Further information may be gained from these sources:
     half hour to allow for some discrepancy between the energy monitor's clock
     and the computer's.
     ```cron
-    3/30 * * * * cd <FOLDER_OF_THIS_SCRIPT> && ./.venv/bin/python3 read_data.py
+    3-59/30 * * * * cd <FOLDER_OF_THIS_SCRIPT> && ./.venv/bin/python3 read_data.py
     ```
