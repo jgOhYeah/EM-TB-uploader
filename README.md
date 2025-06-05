@@ -39,6 +39,17 @@ Further information may be gained from these sources:
 5. Make a copy of [`settings.example.py`](./settings.example.py) and name it 
     `settings.py`. Fill in the required constants for file paths, UUIDs, address
     of your ThingsBoard server and access token.
+6. If you plan to make the computer remove power from its USB ports between readings to reduce damage from overcharging the battery in the monitor, set `REMOVE_POWER_BETWEEN_RUNS` to be `True`.
+    - Udev rules can be added based on the [uhubctl](https://github.com/mvp/uhubctl/tree/master) readme to give permission for non-root users to perform these actions.
+    - The included [`52-usb-hub-power.rules`](./52-usb-hub-power.rules) file is set up for a Raspberry Pi 3B. Modify as needed and copy this to `/etc/udev/rules.d/52-usb-hub-power.rules`. Refresh and apply these rules by rebooting or running:
+        ```bash
+        sudo udevadm trigger --attr-match=subsystem=usb
+        ```
+    - The user that will run this script may need to be added to the `dialout` group:
+        ```bash
+        sudo usermod -a -G dialout $USER
+        ```
+    - Test by running the examples from the [uhubctl](https://github.com/mvp/uhubctl/tree/master) readme with and without root permissions.
 6. Check that everything is working correctly by manually running
     [`read_data.py`](./read_data.py).
     ```bash

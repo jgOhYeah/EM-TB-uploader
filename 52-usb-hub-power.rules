@@ -1,0 +1,6 @@
+# Gives permission for a normal user to cut power to the USB ports.
+# Used for the smart meter monitor
+SUBSYSTEM=="usb", DRIVER=="usb", MODE="0664", ATTR{idVendor}=="0424", ATTR{idProduct}=="9514", GROUP="dialout"
+SUBSYSTEM=="usb", DRIVER=="usb", \
+  RUN+="/bin/sh -c \"chown -f root:dialout $sys$devpath/*port*/disable || true\"" \
+  RUN+="/bin/sh -c \"chmod -f 660 $sys$devpath/*port*/disable || true\""

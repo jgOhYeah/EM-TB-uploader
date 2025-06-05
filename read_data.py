@@ -89,14 +89,18 @@ class NotConnectedException(Exception):
     pass
 
 
-def remount() -> None:
+def remount(unmount:bool) -> None:
     """Remounts the energy monitor's filesystem to get the latest data."""
-    subprocess.run(("udisksctl", "unmount", "-b", settings.DISK_PATH))
+    if unmount:
+        subprocess.run(("udisksctl", "unmount", "-b", settings.DISK_PATH))
     try:
         subprocess.run(("udisksctl", "mount", "-b", settings.DISK_PATH), check=True)
     except subprocess.CalledProcessError as e:
         raise NotConnectedException(e)
 
+def set_usb_power(state:bool) -> None:
+    """Turns on or off power for the USB port."""
+    subprocess.run(("uhubctl", "-l", settings.USB_HUB_LOCATION, "-p", settings.USB_HUB_PORT, "-a", "1" if state else "0"))
 
 Telemetry = List[Dict[str, int | Dict[str, float]]]
 
@@ -170,7 +174,14 @@ def send_telemetry(telemetry: Telemetry) -> None:
 
 
 if __name__ == "__main__":
-    remount()
+    # Apply power and mount the partition or remount.
+    if settings.REMOVE_POWER_BETWEEN_RUNS:
+        set_usb_power(True)
+        remount(False)
+    else:
+        remount(True)
+    
+    # Aquire and process the data.
     telemetry = as_telemetry(
         {
             "gen": Data("gen.js"),
@@ -181,4 +192,9 @@ if __name__ == "__main__":
     )
     print(json.dumps(telemetry))
     send_telemetry(telemetry)
+
+    # Turn off power if needed.
+    if settings.REMOVE_POWER_BETWEEN_RUNS:
+        set_usb_power(False)
+        
     print("Finished")
