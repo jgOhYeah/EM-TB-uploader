@@ -12,6 +12,7 @@ import threading
 from typing import Dict, List, Tuple
 import subprocess
 import paho.mqtt.client as mqtt
+import time
 
 try:
     import settings
@@ -102,6 +103,18 @@ def set_usb_power(state:bool) -> None:
     """Turns on or off power for the USB port."""
     subprocess.run(("uhubctl", "-l", settings.USB_HUB_LOCATION, "-p", settings.USB_HUB_PORT, "-a", "1" if state else "0"))
 
+    if state:
+        # Wait for the partition to appear if need be.
+        print("Waiting for partition to appear")
+        for i in range(30):
+            if os.path.exists(settings.DISK_PATH) and os.path.exists(settings.FOLDER):
+                # Partition exists. Wait is over.
+                print("Partition found and mounted.")
+                break
+            time.sleep(1)
+        else:
+            # The loop timed out before the partition appeared.
+            raise NotConnectedException("The partition did not appear after applying power.")
 Telemetry = List[Dict[str, int | Dict[str, float]]]
 
 
@@ -177,7 +190,6 @@ if __name__ == "__main__":
     # Apply power and mount the partition or remount.
     if settings.REMOVE_POWER_BETWEEN_RUNS:
         set_usb_power(True)
-        remount(False)
     else:
         remount(True)
     
